@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+*.so
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Environment variables
+.env
+
+# IDEs
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Build files
+/build
+/dist
+
+# Logs
+*.log
+
+# Google Cloud credentials
+google-credentials.json
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# Audio files
+*.mp3
+*.m4a
+*.wav
