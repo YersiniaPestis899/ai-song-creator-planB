@@ -10,11 +10,18 @@ import {
   Paper,
   IconButton,
   Stack,
-  Snackbar
+  Snackbar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  LinearProgress
 } from '@mui/material';
-import { Mic, Stop, Refresh } from '@mui/icons-material';
+import { Mic, Stop, Refresh, Settings } from '@mui/icons-material';
 import axios from 'axios';
 
+// 進行状況表示コンポーネント
 const GenerationProgress = ({ status }) => {
   const getStatusContent = () => {
     switch (status) {
@@ -22,19 +29,19 @@ const GenerationProgress = ({ status }) => {
         return {
           title: '🎨 作詞中...',
           description: 'AIがあなたの回答から歌詞を作成しています',
-          color: 'bg-blue-500'
+          color: 'primary.light'
         };
       case 'generating_music':
         return {
-          title: '🎵 作曲中...',
-          description: '音楽を生成しています（3分程度かかります）',
-          color: 'bg-purple-500'
+          title: '🎵 生成中...',
+          description: 'ミュージックビデオを生成しています（3分程度かかります）',
+          color: 'secondary.light'
         };
       case 'complete':
         return {
           title: '✨ 完成！',
-          description: 'ミュージックビデオを新しいタブで開きます...',
-          color: 'bg-green-500'
+          description: 'ミュージックビデオが生成されました',
+          color: 'success.light'
         };
       default:
         return null;
@@ -45,26 +52,64 @@ const GenerationProgress = ({ status }) => {
   if (!content) return null;
 
   return (
-    <div className="w-full max-w-md mx-auto mt-4 p-4 bg-white rounded-lg shadow-lg">
-      <div className="mb-4">
-        <h3 className="text-lg font-semibold mb-2">{content.title}</h3>
-        <p className="text-gray-600">{content.description}</p>
-      </div>
-      <div className="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
-        <div 
-          className={`h-full ${content.color} animate-pulse`}
-          style={{ 
-            width: status === 'complete' ? '100%' : '80%',
-            transition: 'width 0.5s ease-in-out'
-          }}
+    <Paper sx={{ p: 2, my: 2 }}>
+      <Typography variant="h6" gutterBottom>
+        {content.title}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" gutterBottom>
+        {content.description}
+      </Typography>
+      <Box sx={{ width: '100%', mt: 2 }}>
+        <LinearProgress 
+          variant="indeterminate"
+          sx={{ 
+            height: 8, 
+            borderRadius: 1,
+            backgroundColor: 'grey.200',
+            '& .MuiLinearProgress-bar': {
+              backgroundColor: content.color
+            }
+          }} 
         />
-      </div>
-    </div>
+      </Box>
+    </Paper>
   );
 };
 
-function App() {
-  // State management
+// 音声設定ダイアログコンポーネント
+const AudioSetupDialog = ({ open, onClose }) => (
+  <Dialog open={open} onClose={onClose}>
+    <DialogTitle>リップシンクの設定方法</DialogTitle>
+    <DialogContent>
+      <DialogContentText>
+        <Typography variant="h6" gutterBottom>
+          初期設定手順:
+        </Typography>
+        <ol style={{ paddingLeft: '20px' }}>
+          <li>1. Audio MIDI設定を開く</li>
+          <li>2. 左下の+ボタンから「新規マルチ出力デバイス」を作成</li>
+          <li>3. 名前を「Music Output」に設定</li>
+          <li>4. 以下の出力にチェックを入れる:
+            <ul style={{ paddingLeft: '20px', marginTop: '8px' }}>
+              <li>- MacBook Airのスピーカー</li>
+              <li>- VB-Cable</li>
+            </ul>
+          </li>
+          <li>5. システム設定→サウンド→出力で「Music Output」を選択</li>
+          <li>6. 3teneの音声入力で「VB-Cable」を選択</li>
+        </ol>
+      </DialogContentText>
+    </DialogContent>
+    <DialogActions>
+      <Button onClick={onClose} color="primary">
+        設定完了
+      </Button>
+    </DialogActions>
+  </Dialog>
+);
+
+const App = () => {
+  // State管理
   const [connected, setConnected] = useState(false);
   const [personDetected, setPersonDetected] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState('');
@@ -74,6 +119,8 @@ function App() {
   const [musicError, setMusicError] = useState('');
   const [notification, setNotification] = useState({ type: '', message: '' });
   const [generationStatus, setGenerationStatus] = useState(null);
+  const [setupDialogOpen, setSetupDialogOpen] = useState(false);
+  const [musicData, setMusicData] = useState(null);
   
   // Refs
   const ws = useRef(null);
@@ -81,11 +128,9 @@ function App() {
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
 
-  // WebSocket connection management
+  // WebSocket接続管理
   const connectWebSocket = () => {
-    if (ws.current?.readyState === WebSocket.OPEN) {
-      return;
-    }
+    if (ws.current?.readyState === WebSocket.OPEN) return;
 
     ws.current = new WebSocket('ws://localhost:8000/ws');
 
@@ -94,26 +139,7 @@ function App() {
       setConnected(true);
       reconnectAttempts.current = 0;
       setNotification({ type: 'success', message: 'サーバーに接続しました' });
-    };
-
-    ws.current.onclose = () => {
-      console.log('WebSocket disconnected');
-      setConnected(false);
-      
-      if (reconnectAttempts.current < maxReconnectAttempts) {
-        reconnectAttempts.current += 1;
-        const timeout = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
-        setNotification({ 
-          type: 'warning', 
-          message: `接続が切断されました。再接続を試みています (${reconnectAttempts.current}/${maxReconnectAttempts})...` 
-        });
-        setTimeout(connectWebSocket, timeout);
-      } else {
-        setNotification({ 
-          type: 'error', 
-          message: '接続を確立できませんでした。ページを更新してください。' 
-        });
-      }
+      setSetupDialogOpen(true);
     };
 
     ws.current.onmessage = async (event) => {
@@ -122,26 +148,43 @@ function App() {
         if (typeof message === 'string') {
           try {
             const data = JSON.parse(message);
-            if (data.type === 'status_update') {
-              setGenerationStatus(data.status);
-              setNotification({ 
-                type: 'info', 
-                message: data.status === 'generating_lyrics' ? '作詞を開始しました' : '作曲を開始しました' 
-              });
-            } else if (data.type === 'music_complete') {
-              setGenerationStatus('complete');
-              setMusicError('');
-              setNotification({ type: 'success', message: '音楽の生成が完了しました！' });
-              // 新しいタブでビデオを開く
-              setTimeout(() => {
-                window.open(data.data.video_url, '_blank');
-              }, 3000); // 3秒後に新しいタブでビデオを開く
-            } else if (data.type === 'music_error') {
-              setGenerationStatus(null);
-              setMusicError(data.data);
-              setNotification({ type: 'error', message: `エラーが発生しました: ${data.data}` });
-            } else if (data.type === 'error') {
-              setNotification({ type: 'error', message: data.message });
+            
+            switch (data.type) {
+              case 'setup_instruction':
+                setNotification({ type: 'info', message: 'リップシンクの設定を確認してください' });
+                setSetupDialogOpen(true);
+                break;
+                
+              case 'status_update':
+                setGenerationStatus(data.status);
+                setNotification({ 
+                  type: 'info', 
+                  message: data.status === 'generating_lyrics' ? '作詞を開始しました' : 'ミュージックビデオを生成中です' 
+                });
+                break;
+                
+              case 'lip_sync_ready':
+                setNotification({ type: 'success', message: 'リップシンクの準備が完了しました' });
+                break;
+                
+              case 'music_complete':
+                setGenerationStatus('complete');
+                setMusicData(data.data);
+                if (data.data.video_url) {
+                  window.open(data.data.video_url, '_blank');
+                }
+                setNotification({ type: 'success', message: 'ミュージックビデオの生成が完了しました！' });
+                break;
+                
+              case 'music_error':
+                setGenerationStatus(null);
+                setMusicError(data.data);
+                setNotification({ type: 'error', message: `エラーが発生しました: ${data.data}` });
+                break;
+                
+              case 'error':
+                setNotification({ type: 'error', message: data.message });
+                break;
             }
           } catch (jsonError) {
             if (message === 'person_detected') {
@@ -159,23 +202,34 @@ function App() {
       }
     };
 
+    ws.current.onclose = () => {
+      setConnected(false);
+      if (reconnectAttempts.current < maxReconnectAttempts) {
+        reconnectAttempts.current += 1;
+        const timeout = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
+        setNotification({ 
+          type: 'warning', 
+          message: `接続が切断されました。再接続を試みています (${reconnectAttempts.current}/${maxReconnectAttempts})...` 
+        });
+        setTimeout(connectWebSocket, timeout);
+      } else {
+        setNotification({ type: 'error', message: '接続を確立できませんでした。ページを更新してください。' });
+      }
+    };
+
     ws.current.onerror = (error) => {
       console.error('WebSocket error:', error);
       setNotification({ type: 'error', message: 'WebSocket接続エラーが発生しました' });
     };
   };
 
-  // Initialize WebSocket connection
   useEffect(() => {
     connectWebSocket();
     return () => {
-      if (ws.current) {
-        ws.current.close();
-      }
+      if (ws.current) ws.current.close();
     };
   }, []);
 
-  // Camera control
   const startCamera = () => {
     if (ws.current?.readyState === WebSocket.OPEN) {
       ws.current.send('start_camera');
@@ -186,7 +240,6 @@ function App() {
     }
   };
 
-  // Audio recording management
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -237,7 +290,6 @@ function App() {
     }
   };
 
-  // Reset application state
   const resetApplication = () => {
     setPersonDetected(false);
     setCurrentQuestion('');
@@ -246,6 +298,7 @@ function App() {
     setIsRecording(false);
     setMusicError('');
     setGenerationStatus(null);
+    setMusicData(null);
     setNotification({ type: 'info', message: 'アプリケーションをリセットしました' });
   };
 
@@ -257,9 +310,21 @@ function App() {
             <Typography variant="h4" component="h1">
               AI Song Creator
             </Typography>
-            <IconButton onClick={resetApplication} title="リセット">
-              <Refresh />
-            </IconButton>
+            <Stack direction="row" spacing={1}>
+              <IconButton 
+                onClick={() => setSetupDialogOpen(true)} 
+                title="リップシンク設定"
+                color="primary"
+              >
+                <Settings />
+              </IconButton>
+              <IconButton 
+                onClick={resetApplication} 
+                title="リセット"
+              >
+                <Refresh />
+              </IconButton>
+            </Stack>
           </Stack>
 
           <Box my={2} textAlign="center">
@@ -330,29 +395,57 @@ function App() {
             </Box>
           )}
 
-          {generationStatus && (
-            <GenerationProgress status={generationStatus} />
-          )}
+          {generationStatus && <GenerationProgress status={generationStatus} />}
 
           {musicError && (
             <Alert severity="error" sx={{ my: 2 }}>
               エラーが発生しました: {musicError}
             </Alert>
           )}
+
+          {musicData && (
+            <Box mt={4}>
+              <Alert severity="success" sx={{ mb: 2 }}>
+                ミュージックビデオの生成が完了しました！
+                {musicData.video_url && "新しいタブで自動的に開かれます"}
+              </Alert>
+
+              {musicData.video_url && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  fullWidth
+                  onClick={() => window.open(musicData.video_url, '_blank')}
+                  sx={{ mt: 2 }}
+                >
+                  ミュージックビデオを開く
+                </Button>
+              )}
+            </Box>
+          )}
         </Paper>
       </Box>
+
+      <AudioSetupDialog 
+        open={setupDialogOpen}
+        onClose={() => setSetupDialogOpen(false)}
+      />
 
       <Snackbar
         open={!!notification.message}
         autoHideDuration={6000}
         onClose={() => setNotification({ type: '', message: '' })}
       >
-        <Alert severity={notification.type || 'info'} onClose={() => setNotification({ type: '', message: '' })}>
+        <Alert 
+          onClose={() => setNotification({ type: '', message: '' })}
+          severity={notification.type || 'info'}
+          sx={{ width: '100%' }}
+        >
           {notification.message}
         </Alert>
       </Snackbar>
     </Container>
   );
-}
+};
 
 export default App;
