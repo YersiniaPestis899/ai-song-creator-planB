@@ -78,8 +78,94 @@ async def play_audio(audio_data):
     except Exception as e:
         logger.error(f"Error playing audio: {str(e)}")
 
+def get_vb_cable_device():
+    """VB-Cable出力デバイスのインデックスを取得（MacOS対応）"""
+    try:
+        devices = sd.query_devices()
+        for idx, device in enumerate(devices):
+            # MacOSでの完全一致検出
+            if device['name'] == 'VB-Cable' and device['max_output_channels'] > 0:
+                logger.info(f"✓ Using VB-Cable device at index {idx} for audio output")
+                return idx
+        
+        logger.warning("VB-Cable device not found, using default output device")
+        return sd.default.device[1]  # デフォルト出力デバイス
+    except Exception as e:
+        logger.error(f"Error finding VB-Cable device: {str(e)}")
+        return sd.default.device[1]  # エラー時もデフォルトデバイスを返す
+
+def check_system_audio():
+    """システムの音声設定を確認（MacOS対応）"""
+    try:
+        devices = sd.query_devices()
+        logger.info("\nSystem Audio Configuration:")
+        
+        vb_cable_found = False
+        
+        # オーディオデバイスの確認
+        for idx, device in enumerate(devices):
+            logger.info(f"[{idx}] {device['name']}")
+            
+            # MacOSでのVB-Cable検出に対応
+            if any(name in device['name'] for name in ['VB-Cable', 'CABLE Input']):
+                vb_cable_found = True
+                logger.info(f"   ✓ VB-Cable device found (ID: {idx})")
+                logger.info(f"   Channels: {device['max_input_channels']} in, {device['max_output_channels']} out")
+            
+            if device['max_output_channels'] > 0:
+                logger.info(f"   ✓ Output device detected (ID: {idx})")
+            if device['max_input_channels'] > 0:
+                logger.info(f"   ✓ Input device detected (ID: {idx})")
+        
+        if not vb_cable_found:
+            logger.warning("× VB-Cable not found - 3tene lip sync may not work")
+        
+        # VOICEVOXの確認
+        response = requests.get("http://localhost:50021/speakers")
+        if response.status_code == 200:
+            logger.info("✓ VOICEVOX engine is running")
+            logger.info("✓ API endpoint is accessible")
+        
+    except Exception as e:
+        logger.error(f"Error checking system audio setup: {str(e)}")
+
+async def play_audio_to_vb_cable(audio_data):
+    """VB-Cable経由で音声を再生（MacOS対応）"""
+    try:
+        # VB-Cableデバイスのインデックスを取得
+        device_idx = get_vb_cable_device()
+        logger.info(f"Selected audio output device ID: {device_idx}")
+
+        # 一時ファイルを作成して音声データを書き込む
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
+            temp_audio.write(audio_data)
+            temp_audio_path = temp_audio.name
+
+        # soundfileを使用して音声を読み込む
+        data, samplerate = sf.read(temp_audio_path)
+        
+        # VB-Cable経由で音声を再生
+        try:
+            devices = sd.query_devices()
+            logger.info(f"Playing audio through: {devices[device_idx]['name']}")
+            sd.play(data, samplerate, device=device_idx)
+            sd.wait()  # 再生完了まで待機
+            logger.info("Audio playback completed successfully")
+        except Exception as e:
+            logger.error(f"Error during audio playback: {str(e)}")
+            # エラー時はデフォルトデバイスで再試行
+            logger.info("Retrying with default audio device")
+            sd.play(data, samplerate)
+            sd.wait()
+        
+        # 一時ファイルを削除
+        os.unlink(temp_audio_path)
+        
+    except Exception as e:
+        logger.error(f"Error in play_audio_to_vb_cable: {str(e)}")
+
 async def synthesize_voicevox(text: str):
-    """Synthesize speech using VOICEVOX"""
+    """Synthesize speech using VOICEVOX and play through VB-Cable"""
     url = "http://localhost:50021"
     
     try:
@@ -90,7 +176,7 @@ async def synthesize_voicevox(text: str):
             f"{url}/audio_query",
             params={
                 "text": text,
-                "speaker": 2
+                "speaker": 2  # VOICEVOXのスピーカーID
             }
         )
         if query_response.status_code != 200:
@@ -99,15 +185,15 @@ async def synthesize_voicevox(text: str):
             
         query_data = query_response.json()
         
-        # 音声合成のパラメータを調整
+        # 音声合成のパラメータを調整（3teneのリップシンクに適した設定）
         query_data.update({
             "volumeScale": 1.0,
-            "outputSamplingRate": 24000,
-            "outputStereo": False,
+            "outputSamplingRate": 48000,  # サンプリングレートを48kHzに設定
+            "outputStereo": False,  # モノラル出力
             "intonationScale": 1.0,
             "speedScale": 1.0,
-            "prePhonemeLength": 0.05,
-            "postPhonemeLength": 0.05
+            "prePhonemeLength": 0.1,    # 少し長めに設定
+            "postPhonemeLength": 0.1    # 少し長めに設定
         })
         
         # Step 2: Synthesize speech
@@ -127,8 +213,8 @@ async def synthesize_voicevox(text: str):
             logger.error(f"Synthesis failed: {synthesis_response.status_code}")
             return None
 
-        # 音声を再生
-        await play_audio(synthesis_response.content)
+        # VB-Cable経由で音声を再生
+        await play_audio_to_vb_cable(synthesis_response.content)
         return synthesis_response.content
         
     except Exception as e:
@@ -136,18 +222,39 @@ async def synthesize_voicevox(text: str):
         return None
 
 def check_system_audio():
-    """システムの音声設定を確認"""
+    """システムの音声設定を確認（MacOS対応）"""
     try:
         devices = sd.query_devices()
         logger.info("\nSystem Audio Configuration:")
         
+        vb_cable_found = False
+        
         # オーディオデバイスの確認
         for idx, device in enumerate(devices):
             logger.info(f"[{idx}] {device['name']}")
+            device_info = []
+            
+            # 出力チャンネルの確認
             if device['max_output_channels'] > 0:
-                logger.info(f"   ✓ Audio output device detected (ID: {idx})")
+                device_info.append("✓ Output device detected")
+            
+            # 入力チャンネルの確認
             if device['max_input_channels'] > 0:
-                logger.info(f"   ✓ Audio input device detected (ID: {idx})")
+                device_info.append("✓ Input device detected")
+            
+            # MacOS用のVB-Cable検出
+            if device['name'] == 'VB-Cable':  # 完全一致で検出
+                vb_cable_found = True
+                device_info.append(f"✓ VB-Cable detected - IO Channels: {device['max_input_channels']} in, {device['max_output_channels']} out")
+            
+            # デバイス情報をログ出力
+            for info in device_info:
+                logger.info(f"   {info}")
+        
+        if vb_cable_found:
+            logger.info("✓ VB-Cable is properly configured")
+        else:
+            logger.warning("× VB-Cable not found - 3tene lip sync may not work")
         
         # VOICEVOXの確認
         response = requests.get("http://localhost:50021/speakers")
