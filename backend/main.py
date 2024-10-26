@@ -18,6 +18,7 @@ import sounddevice as sd
 import soundfile as sf
 from PIL import Image
 import io
+import re
 
 # Configure logging
 logging.basicConfig(
@@ -26,84 +27,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def get_vb_cable_device():
-    """VB-Cable出力デバイスのインデックスを取得"""
+async def play_audio_simple(audio_data):
+    """シンプルな音声再生関数"""
     try:
-        devices = sd.query_devices()
-        for idx, device in enumerate(devices):
-            if device['name'] == 'VB-Cable' and device['max_output_channels'] > 0:
-                logger.info(f"✓ Using VB-Cable device at index {idx}")
-                return idx
-        
-        logger.warning("VB-Cable device not found, using default output device")
-        return sd.default.device[1]
-    except Exception as e:
-        logger.error(f"Error finding VB-Cable device: {str(e)}")
-        return sd.default.device[1]
-
-async def play_audio_to_vb_cable(audio_data):
-    """VB-Cable経由で音声を再生（リップシンク用）"""
-    try:
-        device_idx = get_vb_cable_device()
-        logger.info(f"Selected audio output device ID: {device_idx}")
-
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
             temp_audio.write(audio_data)
             temp_audio_path = temp_audio.name
 
+        # 音声データを読み込み
         data, samplerate = sf.read(temp_audio_path)
         
-        try:
-            devices = sd.query_devices()
-            logger.info(f"Playing audio through: {devices[device_idx]['name']}")
-            sd.play(data, samplerate, device=device_idx)
-            sd.wait()
-            logger.info("Audio playback completed")
-        except Exception as e:
-            logger.error(f"Error during audio playback: {str(e)}")
-            logger.info("Retrying with default audio device")
-            sd.play(data, samplerate)
-            sd.wait()
+        # デフォルトデバイスで再生
+        sd.play(data, samplerate)
+        sd.wait()  # 再生完了まで待機
+        logger.info("Audio playback completed")
         
+        # 一時ファイルの削除
         os.unlink(temp_audio_path)
         
     except Exception as e:
-        logger.error(f"Error in play_audio_to_vb_cable: {str(e)}")
-
-def check_system_setup():
-    """システムセットアップの確認"""
-    logger.info("\nSystem Setup Check:")
-    
-    # Check VB-Cable
-    try:
-        devices = sd.query_devices()
-        vb_cable_found = False
-        
-        for idx, device in enumerate(devices):
-            if device['name'] == 'VB-Cable':
-                vb_cable_found = True
-                logger.info(f"✓ VB-Cable found at index {idx}")
-                logger.info(f"  Channels: {device['max_input_channels']} in, {device['max_output_channels']} out")
-        
-        if not vb_cable_found:
-            logger.warning("× VB-Cable not found - 3tene lip sync will not work")
-    except Exception as e:
-        logger.error(f"Error checking audio devices: {str(e)}")
-
-    # Check VOICEVOX
-    try:
-        response = requests.get("http://localhost:50021/speakers")
-        if response.status_code == 200:
-            logger.info("✓ VOICEVOX engine is running")
-            speakers = response.json()
-            logger.info(f"✓ Found {len(speakers)} speakers")
-        else:
-            logger.error(f"× VOICEVOX engine error: {response.status_code}")
-    except Exception as e:
-        logger.error(f"× VOICEVOX connection error: {str(e)}")
+        logger.error(f"Error in play_audio_simple: {str(e)}")
 
 async def synthesize_voicevox(text: str):
-    """VOICEVOXを使用して音声合成を行い、VB-Cable経由で再生"""
+    """VOICEVOXを使用して音声合成を行い、直接再生"""
     url = "http://localhost:50021"
     
     try:
@@ -122,15 +68,15 @@ async def synthesize_voicevox(text: str):
             
         query_data = query_response.json()
         
-        # リップシンクに適した音声パラメータ設定
+        # 音声パラメータ設定
         query_data.update({
             "volumeScale": 1.0,
-            "outputSamplingRate": 48000,  # 高品質サンプリングレート
-            "outputStereo": False,        # モノラル出力
+            "outputSamplingRate": 48000,  # 標準的なサンプリングレート
+            "outputStereo": True,         # ステレオ出力
             "intonationScale": 1.0,
             "speedScale": 1.0,
-            "prePhonemeLength": 0.1,      # 口形の遷移時間確保
-            "postPhonemeLength": 0.1      # 口形の遷移時間確保
+            "prePhonemeLength": 0.1,
+            "postPhonemeLength": 0.1
         })
         
         # 音声合成を実行
@@ -148,48 +94,29 @@ async def synthesize_voicevox(text: str):
             logger.error(f"Synthesis failed: {synthesis_response.status_code}")
             return None
 
-        # VB-Cable経由で再生（リップシンク用）
-        audio_data = synthesis_response.content
-        device_idx = get_vb_cable_device()
-        
-        try:
-            # 一時ファイルに保存
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
-                temp_audio.write(audio_data)
-                temp_path = temp_audio.name
-
-            # VB-Cable経由で再生
-            data, samplerate = sf.read(temp_path)
-            sd.play(data, samplerate, device=device_idx)
-            sd.wait()  # 再生完了まで待機
-            
-            # 一時ファイル削除
-            os.unlink(temp_path)
-            
-            return True
-
-        except Exception as e:
-            logger.error(f"Error playing through VB-Cable: {e}")
-            return False
+        # 直接再生
+        await play_audio_simple(synthesis_response.content)
+        return True
             
     except Exception as e:
         logger.error(f"Error in synthesize_voicevox: {str(e)}")
         return None
 
-def get_vb_cable_device():
-    """VB-Cable出力デバイスのインデックスを取得"""
+def check_system_setup():
+    """VOICEVOXの起動確認"""
+    logger.info("\nSystem Setup Check:")
+    
+    # Check VOICEVOX
     try:
-        devices = sd.query_devices()
-        for idx, device in enumerate(devices):
-            if device['name'] == 'VB-Cable' and device['max_output_channels'] > 0:
-                logger.info(f"Using VB-Cable at index {idx}")
-                return idx
-        
-        logger.warning("VB-Cable not found, using default output")
-        return sd.default.device[1]
+        response = requests.get("http://localhost:50021/speakers")
+        if response.status_code == 200:
+            logger.info("✓ VOICEVOX engine is running")
+            speakers = response.json()
+            logger.info(f"✓ Found {len(speakers)} speakers")
+        else:
+            logger.error(f"× VOICEVOX engine error: {response.status_code}")
     except Exception as e:
-        logger.error(f"Error finding VB-Cable: {str(e)}")
-        return sd.default.device[1]
+        logger.error(f"× VOICEVOX connection error: {str(e)}")
 
 # Load environment variables
 load_dotenv()
@@ -235,10 +162,10 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.accept()
         logger.info("WebSocket connected")
         
-        # リップシンクの準備確認を送信
+        # リップシンク準備の確認メッセージを送信
         await websocket.send_text(json.dumps({
             "type": "setup_instruction",
-            "message": "3teneでVB-Cableの設定を確認してください"
+            "message": "3teneの準備ができたら開始します"
         }))
         
         while True:
@@ -338,10 +265,10 @@ async def start_interview(websocket: WebSocket):
         # リップシンク準備の確認を送信
         await websocket.send_text(json.dumps({
             "type": "lip_sync_ready",
-            "message": "リップシンクの準備が完了しました"
+            "message": "インタビューを開始します"
         }))
         
-        # Greeting with lip sync
+        # Greeting
         greeting = "こんにちは！青春ソングを作るためのインタビューを始めましょう。各質問に一言で答えてください。"
         await synthesize_voicevox(greeting)
         await websocket.send_text(greeting)
@@ -351,7 +278,7 @@ async def start_interview(websocket: WebSocket):
         for i, question in enumerate(QUESTIONS):
             await asyncio.sleep(0.5)
             
-            # Ask question with lip sync
+            # Ask question
             await synthesize_voicevox(question)
             await websocket.send_text(question)
             await asyncio.sleep(0.5)
@@ -360,7 +287,7 @@ async def start_interview(websocket: WebSocket):
             response = await websocket.receive_text()
             answers[f"answer_{i+1}"] = response
         
-        # Final message with lip sync
+        # Final message
         end_message = "ありがとうございます。ミュージックビデオの生成を開始します。"
         await synthesize_voicevox(end_message)
         await websocket.send_text(end_message)
@@ -496,7 +423,7 @@ async def generate_lyrics(request: Dict[str, str]):
         raise
 
 async def generate_music(request: Dict[str, Any]):
-    """Generate music using Suno AI and get mp4 output"""
+    """Generate music using Suno AI with no repeats"""
     suno_api_url = "https://api.goapi.ai/api/suno/v1/music"
     
     headers = {
@@ -505,47 +432,61 @@ async def generate_music(request: Dict[str, Any]):
     }
     
     themes = request.get("themes", [])
-    lyrics = request.get("lyrics", "")
-    description = f"A Japanese pop song with female vocals based on these themes: {' '.join(themes)}"
+    themes_text = " ".join(themes)
+    
+    # メロディーとセクションの両方についてリピート禁止を指定
+    description = (
+        f"J-pop about {themes_text}. "
+        "One intro, verse, chorus. No melody repeats. No section repeats. Single take. Female JP vocal."
+    )
+    
+    # 文字数チェック
+    if len(description) > 200:
+        max_themes_length = 100  # より短いテーマ長を確保
+        if len(themes_text) > max_themes_length:
+            themes_text = themes_text[:max_themes_length] + "..."
+            description = (
+                f"J-pop about {themes_text}. "
+                "One-shot song. No repeats. Female JP vocal."
+            )
+    
+    logger.info(f"Prompt length: {len(description)} characters")
     
     payload = {
         "custom_mode": False,
         "mv": "chirp-v3-5",
         "input": {
             "gpt_description_prompt": description,
-            "lyrics": lyrics,
             "make_instrumental": False,
             "voice": "female",
             "style": "j-pop",
-            "temperature": 0.7,
-            "top_k": 50,
-            "top_p": 0.95,
+            "temperature": 0.3,  # さらに決定論的に
             "voice_settings": {
                 "gender": "female",
-                "style": "clear and emotional",
-                "language": "japanese"
-            },
-            "music_settings": {
-                "genre": "j-pop",
-                "mood": "emotional",
-                "tempo": "medium",
-                "energy_level": "moderate"
+                "language": "japanese",
+                "style": "clear",
+                "variation": "single"  # バリエーションを制限
             }
         }
     }
     
     try:
-        # Generate initial request
-        logger.info(f"Starting music generation with description: {description}")
+        logger.info(f"Starting music generation with no-repeat constraint")
+        logger.info(f"Using prompt: {description}")
+        
         response = requests.post(suno_api_url, headers=headers, json=payload)
-        response.raise_for_status()
+        
+        if response.status_code != 200:
+            logger.error(f"API Error: Status {response.status_code}")
+            logger.error(f"Response: {response.text}")
+            response.raise_for_status()
         
         task_data = response.json()
         task_id = task_data['data']['task_id']
-        logger.info(f"Music generation task started with ID: {task_id}")
+        logger.info(f"Task ID: {task_id}")
         
-        # Monitor progress
-        max_attempts = 120  # 10分のタイムアウト
+        # 進捗モニタリング
+        max_attempts = 120
         current_attempt = 0
         last_progress = -1
         
@@ -556,23 +497,30 @@ async def generate_music(request: Dict[str, Any]):
                 status_data = status_response.json()
 
                 if 'data' not in status_data:
-                    raise ValueError("Invalid status response format")
+                    logger.error("Invalid response structure")
+                    logger.debug(f"Response data: {status_data}")
+                    raise ValueError("Invalid response format")
 
                 status = status_data['data'].get('status')
                 
                 if status == 'completed':
-                    clips = status_data['data'].get('clips', {})
-                    if not clips:
-                        raise ValueError("No clips found in completed response")
-
-                    # 最長のクリップを選択
-                    longest_clip = max(clips.values(), key=lambda x: x.get('duration', 0))
-                    video_url = longest_clip.get('video_url')
+                    video_url = None
+                    
+                    if 'video_url' in status_data['data']:
+                        video_url = status_data['data']['video_url']
+                    elif 'output' in status_data['data'] and 'video_url' in status_data['data']['output']:
+                        video_url = status_data['data']['output']['video_url']
+                    elif 'clips' in status_data['data']:
+                        clips = status_data['data']['clips']
+                        if clips and isinstance(clips, dict):
+                            first_clip = next(iter(clips.values()))
+                            if 'video_url' in first_clip:
+                                video_url = first_clip['video_url']
 
                     if not video_url:
                         raise ValueError("No video URL found in response")
 
-                    logger.info(f"Generation completed. Video URL: {video_url}")
+                    logger.info("Music generation completed successfully")
                     return {
                         "video_url": video_url
                     }
@@ -580,12 +528,12 @@ async def generate_music(request: Dict[str, Any]):
                 elif status == 'failed':
                     error_message = status_data['data'].get('error', 'Unknown error')
                     logger.error(f"Generation failed: {error_message}")
-                    return {"error": f"Music generation failed: {error_message}"}
+                    raise ValueError(f"Generation failed: {error_message}")
 
                 elif status == 'processing':
                     progress = status_data['data'].get('progress', 0)
                     if progress != last_progress:
-                        logger.info(f"Generation progress: {progress}%")
+                        logger.info(f"Progress: {progress}%")
                         last_progress = progress
                     current_attempt += 1
                     await asyncio.sleep(5)
@@ -596,23 +544,20 @@ async def generate_music(request: Dict[str, Any]):
                     await asyncio.sleep(5)
 
             except requests.RequestException as e:
-                logger.error(f"Error checking status: {e}")
+                logger.error(f"Network error: {e}")
                 current_attempt += 1
                 await asyncio.sleep(5)
                 continue
 
         logger.error("Generation timed out")
-        return {"error": "Music generation timed out after 10 minutes"}
-
-    except requests.RequestException as e:
-        logger.error(f"Request error: {str(e)}")
-        return {"error": f"API request failed: {str(e)}"}
-    except ValueError as e:
-        logger.error(f"Value error: {str(e)}")
-        return {"error": str(e)}
+        raise TimeoutError("Music generation timed out")
+            
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        return {"error": f"An unexpected error occurred: {str(e)}"}
+        logger.error(f"Error in music generation: {str(e)}")
+        return {"error": f"Failed to generate music: {str(e)}"}
+        
+    finally:
+        logger.debug("Generation attempt completed")
 
 if __name__ == "__main__":
     import uvicorn
