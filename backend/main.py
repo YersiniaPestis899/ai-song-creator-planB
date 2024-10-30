@@ -58,7 +58,7 @@ async def synthesize_voicevox(text: str):
             f"{url}/audio_query",
             params={
                 "text": text,
-                "speaker": 2
+                "speaker": 8
             }
         )
         
@@ -460,7 +460,9 @@ async def generate_music(request: Dict[str, Any]):
             "make_instrumental": False,
             "voice": "female",
             "style": "j-pop",
-            "temperature": 0.3,  # さらに決定論的に
+            "temperature": 0.1,  # さらに決定論的に
+            "top_k": 5,
+            "top_p": 0.3,
             "voice_settings": {
                 "gender": "female",
                 "language": "japanese",
