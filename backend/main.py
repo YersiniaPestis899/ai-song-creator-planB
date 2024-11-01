@@ -423,7 +423,7 @@ async def generate_lyrics(request: Dict[str, str]):
         raise
 
 async def generate_music(request: Dict[str, Any]):
-    """Generate music using Suno AI with no repeats"""
+    """Generate music using Suno AI with maximum stability settings"""
     suno_api_url = "https://api.goapi.ai/api/suno/v1/music"
     
     headers = {
@@ -434,21 +434,17 @@ async def generate_music(request: Dict[str, Any]):
     themes = request.get("themes", [])
     themes_text = " ".join(themes)
     
-    # メロディーとセクションの両方についてリピート禁止を指定
+    # 以前の安定していた詳細な制約を持つプロンプト
     description = (
-        f"J-pop about {themes_text}. "
-        "One intro, verse, chorus. No melody repeats. No section repeats. Single take. Female JP vocal."
+        f"Simple J-pop about {themes_text}. "
+        " No repeats. Female JP vocal."
     )
     
-    # 文字数チェック
     if len(description) > 200:
-        max_themes_length = 100  # より短いテーマ長を確保
+        max_themes_length = 100
         if len(themes_text) > max_themes_length:
             themes_text = themes_text[:max_themes_length] + "..."
-            description = (
-                f"J-pop about {themes_text}. "
-                "One-shot song. No repeats. Female JP vocal."
-            )
+            description = f"Simple J-pop about {themes_text}. No repeats. Female JP vocal."
     
     logger.info(f"Prompt length: {len(description)} characters")
     
@@ -460,21 +456,21 @@ async def generate_music(request: Dict[str, Any]):
             "make_instrumental": False,
             "voice": "female",
             "style": "j-pop",
-            "temperature": 0.1,  # さらに決定論的に
-            "top_k": 5,
-            "top_p": 0.3,
+            "temperature": 0.1,        # 極めて低い温度で安定性を確保
+            "top_k": 5,                # 非常に制限的な選択
+            "top_p": 0.3,              # 最も可能性の高い選択のみ
             "voice_settings": {
                 "gender": "female",
                 "language": "japanese",
                 "style": "clear",
-                "variation": "single"  # バリエーションを制限
+                "variation": "single"
             }
         }
     }
     
     try:
-        logger.info(f"Starting music generation with no-repeat constraint")
-        logger.info(f"Using prompt: {description}")
+        logger.info("Starting music generation with maximum stability settings")
+        logger.info(f"Using themes: {themes_text}")
         
         response = requests.post(suno_api_url, headers=headers, json=payload)
         
@@ -487,10 +483,10 @@ async def generate_music(request: Dict[str, Any]):
         task_id = task_data['data']['task_id']
         logger.info(f"Task ID: {task_id}")
         
-        # 進捗モニタリング
         max_attempts = 120
         current_attempt = 0
         last_progress = -1
+        generation_start_time = time.time()
         
         while current_attempt < max_attempts:
             try:
@@ -522,7 +518,8 @@ async def generate_music(request: Dict[str, Any]):
                     if not video_url:
                         raise ValueError("No video URL found in response")
 
-                    logger.info("Music generation completed successfully")
+                    generation_time = time.time() - generation_start_time
+                    logger.info(f"Music generated successfully in {generation_time:.1f} seconds")
                     return {
                         "video_url": video_url
                     }
