@@ -488,14 +488,24 @@ const App = () => {
                   </NotePaper>
                   
                   {/* 回答入力エリア */}
-                  <input
-                    type="text"
-                    value={answer}
-                    onChange={(e) => setAnswer(e.target.value)}
-                    disabled={!currentQuestion || isRecording}
-                    placeholder="回答を入力してください"
-                    className="w-full px-4 py-2 bg-transparent font-handwriting text-lg handwriting-input"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={answer}
+                      onChange={(e) => setAnswer(e.target.value)}
+                      disabled={!currentQuestion || isRecording}
+                      placeholder="回答を入力してください"
+                      className="w-full px-4 py-3 bg-white/90 backdrop-blur-sm rounded-lg 
+                        font-handwriting text-lg border-2 border-gray-300 
+                        focus:border-blue-500 focus:ring-2 focus:ring-blue-200 
+                        transition-all duration-200 shadow-inner
+                        disabled:bg-gray-100 disabled:cursor-not-allowed
+                        placeholder:text-gray-400"
+                    />
+                    {/* 黒板の質感を残すためのオーバーレイ */}
+                    <div className="absolute inset-0 bg-chalkboard/10 pointer-events-none 
+                      rounded-lg border border-white/5"></div>
+                  </div>
                   
                   {/* 操作ボタン */}
                   <div className="flex gap-3">
