@@ -78,6 +78,54 @@ const QRCode = ({ url }) => {
   );
 };
 
+// QRコードモーダルコンポーネント
+const QRCodeModal = ({ url, isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl max-w-sm w-full mx-auto shadow-2xl transform transition-all">
+        {/* モーダルコンテンツ */}
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold font-handwriting">
+              スマートフォンで視聴
+            </h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <XSquare className="w-6 h-6" />
+            </button>
+          </div>
+          
+          <div className="text-center">
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`}
+              alt="QR Code"
+              className="mx-auto mb-4"
+              width="200"
+              height="200"
+            />
+            <p className="text-sm text-gray-600 font-handwriting mb-6">
+              QRコードを読み取ってアクセス
+            </p>
+            
+            {/* ポップアップを閉じるボタン */}
+            <button
+              onClick={onClose}
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg 
+                font-handwriting transition-colors shadow-md transform hover:scale-105 duration-200"
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // AudioSetupDialog コンポーネント
 const AudioSetupDialog = ({ open, onClose }) => {
   if (!open) return null;
@@ -189,6 +237,7 @@ const App = () => {
   const [generationStatus, setGenerationStatus] = useState(null);
   const [setupDialogOpen, setSetupDialogOpen] = useState(false);
   const [musicData, setMusicData] = useState(null);
+  const [isQRModalOpen, setIsQRModalOpen] = useState(false);
 
   // Refs
   const ws = useRef(null);
@@ -308,6 +357,13 @@ const App = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (musicData && musicData.video_url) {
+      // 生成完了時に自動でQRモーダルを表示
+      setIsQRModalOpen(true);
+    }
+  }, [musicData]);
+
   // カメラ起動
   const startCamera = () => {
     if (ws.current?.readyState === WebSocket.OPEN) {
@@ -397,7 +453,6 @@ const App = () => {
   };
 
   return (
-    // 教室をイメージした背景
     <div className="min-h-screen bg-gradient-to-b from-wood-light to-wood-DEFAULT">
       {/* メインコンテンツ */}
       <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -551,7 +606,7 @@ const App = () => {
               </NotePaper>
             )}
 
-            {/* 完了メッセージとQRコード */}
+            {/* 完了メッセージ */}
             {musicData && musicData.video_url && (
               <div className="mt-6 space-y-4">
                 <NotePaper accent="green">
@@ -561,15 +616,21 @@ const App = () => {
                   <div className="flex flex-col items-center gap-4">
                     <button
                       onClick={() => window.open(musicData.video_url, '_blank')}
-                      className="w-full max-w-sm bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-handwriting transition-colors shadow-md transform hover:scale-105 duration-200"
+                      className="w-full max-w-sm bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 
+                        rounded-lg font-handwriting transition-colors shadow-md transform 
+                        hover:scale-105 duration-200"
                     >
                       ブラウザで視聴する
                     </button>
                     
-                    {/* QRコード表示エリア */}
-                    <div className="w-full max-w-sm">
-                      <QRCode url={musicData.video_url} />
-                    </div>
+                    <button
+                      onClick={() => setIsQRModalOpen(true)}
+                      className="w-full max-w-sm bg-green-500 hover:bg-green-600 text-white px-6 py-3 
+                        rounded-lg font-handwriting transition-colors shadow-md transform 
+                        hover:scale-105 duration-200"
+                    >
+                      スマートフォンで視聴
+                    </button>
                   </div>
                 </NotePaper>
               </div>
@@ -583,6 +644,15 @@ const App = () => {
         open={setupDialogOpen}
         onClose={() => setSetupDialogOpen(false)}
       />
+
+      {/* QRコードモーダル */}
+      {musicData && musicData.video_url && (
+        <QRCodeModal
+          url={musicData.video_url}
+          isOpen={isQRModalOpen}
+          onClose={() => setIsQRModalOpen(false)}
+        />
+      )}
 
       {/* 通知メッセージ */}
       {notification.message && (
@@ -599,7 +669,5 @@ const App = () => {
       )}
     </div>
   );
-  // returnステートメント以降は前回のコードをそのまま使用してください
 };
-
 export default App;
