@@ -438,14 +438,18 @@ ws.current.onmessage = async (event) => {
       </h2>
       <div className="space-y-4">
         <p className="text-xl font-handwriting text-gray-700 leading-relaxed max-w-2xl mx-auto">
-          思い出の詰まった青春時代について、
-          <span className="font-bold text-blue-600">5つの質問</span>
-          にお答えください。
+          私と一緒に、あなたの
+          <span className="font-bold text-blue-600">青春時代の思い出</span>
+          を探していきましょう！
         </p>
         <p className="text-xl font-handwriting text-gray-700 leading-relaxed max-w-2xl mx-auto">
-          あなたの回答から、世界にたった一つの
-          <br />
-          オリジナルソングを作り上げます。
+          <span className="font-bold text-blue-600">5つの質問</span>で、
+          あなたの大切な記憶が素敵な歌になって蘇ります。
+        </p>
+        <p className="text-xl font-handwriting text-gray-700 leading-relaxed max-w-2xl mx-auto">
+          さぁ、世界でたった一つの
+          オリジナルソング
+          を一緒に作りましょう！
         </p>
       </div>
       <button
