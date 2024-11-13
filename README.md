@@ -1,136 +1,96 @@
-# AI Song Creator
+# Your Song Creator
 
-このプロジェクトは、ユーザーの回答から個人の青春ソングを自動生成するAIアプリケーションです。VOICEVOXによる音声合成、Suno AIによる音楽生成、AWS BedrockのClaude-3.5-sonnetによる歌詞生成を組み合わせて、オリジナルの楽曲を作成します。
+このアプリケーションは、ユーザーの思い出や経験に基づいて、AIを使用してオリジナルの音楽を生成するウェブアプリケーションです。
 
 ## 機能
 
-- カメラによる人物検出
-- VOICEVOXを使用した音声対話
-- マイク入力による音声認識
+- インタラクティブなインタビュー形式で思い出を収集
+- 音声入力による回答機能
+- リアルタイムの音声合成による質問読み上げ
 - AIによる歌詞生成
-- AIによる楽曲生成
-- ミュージックビデオの自動生成
+- AIによる音楽生成
+- スマートフォンでの視聴用QRコード生成
 
-## 必要要件
+## 技術スタック
 
-### システム要件
-- Windows 11
+### フロントエンド
+- React
+- Tailwind CSS
+- Axios
+- Lucide React (アイコン)
+
+### バックエンド
+- FastAPI
+- Python
+- VOICEVOX (音声合成)
+- AWS Bedrock (歌詞生成)
+- Suno AI (音楽生成)
+- Google Cloud Speech-to-Text (音声認識)
+
+## セットアップ
+
+### 必要条件
+- Node.js
 - Python 3.8以上
-- Node.js 16.0以上
-- npm 7.0以上
+- VOICEVOX Engine
+- AWS アカウント
+- Google Cloud アカウント
+- Suno AI アカウント
 
-### 必要なAPI/サービス
-- AWS Bedrock アカウント
-- Suno AI API キー
-- Google Cloud Speech-to-Text API キー
-
-### 必要なソフトウェア
-- VOICEVOX（Windows版）
-
-## インストール手順
+### インストール
 
 1. リポジトリのクローン
 ```bash
-git clone [リポジトリURL]
-cd ai-song-creator
+git clone https://github.com/YourUsername/ai-song-creator-sub.git
+cd ai-song-creator-sub
 ```
 
-2. バックエンド（Python）の設定
+2. フロントエンド依存関係のインストール
 ```bash
-cd backend
-pip install -r requirements.txt
-```
-
-3. フロントエンド（React）の設定
-```bash
-cd frontend
 npm install
 ```
 
-4. 環境変数の設定
-以下の内容で`.env`ファイルを作成：
+3. バックエンド依存関係のインストール
+```bash
+pip install -r requirements.txt
+```
 
-```env
+4. 環境変数の設定
+`.env` ファイルを作成し、必要な環境変数を設定:
+```
 AWS_ACCESS_KEY_ID=your_aws_access_key
 AWS_SECRET_ACCESS_KEY=your_aws_secret_key
 AWS_REGION=your_aws_region
-CLAUDE_MODEL_ID=your_claude_model_id
 SUNO_API_KEY=your_suno_api_key
 GOOGLE_APPLICATION_CREDENTIALS=path_to_your_google_credentials.json
 ```
 
-## 起動方法
+### 起動方法
 
 1. VOICEVOXの起動
-- VOICEVOXアプリケーションを起動し、エンジンが動作していることを確認
+VOICEVOXエンジンを起動し、ポート50021で待ち受けていることを確認
 
 2. バックエンドの起動
 ```bash
-cd backend
-uvicorn main:app --reload
+python main.py
 ```
 
 3. フロントエンドの起動
 ```bash
-cd frontend
 npm start
-```
-
-4. ブラウザでアプリケーションにアクセス
-```
-http://localhost:3000
 ```
 
 ## 使用方法
 
-1. アプリケーションにアクセスし、「カメラを起動」ボタンをクリック
-2. カメラが人物を検出すると、自動的にインタビューが開始
-3. 5つの質問に回答（テキスト入力または音声入力が可能）
-4. 回答完了後、自動的に歌詞と楽曲の生成を開始
-5. 生成完了後、新しいタブでミュージックビデオが表示
-
-## 注意事項
-
-- カメラとマイクのアクセス許可が必要です
-- VOICEVOXエンジンは必ずアプリケーション起動前に起動してください
-- ブラウザのポップアップブロックを無効にすることを推奨します
-- 音楽生成には数分かかる場合があります
-
-## トラブルシューティング
-
-### よくある問題と解決方法
-
-1. カメラが認識されない場合
-- ブラウザのカメラ権限を確認
-- 他のアプリケーションがカメラを使用していないか確認
-
-2. 音声が再生されない場合
-- VOICEVOXエンジンが起動していることを確認
-- ブラウザの音声設定を確認
-
-3. APIエラーが発生する場合
-- 環境変数が正しく設定されているか確認
-- API制限に達していないか確認
-
-### ログの確認方法
-
-- バックエンドのログは`backend/logs/`ディレクトリに保存されます
-- フロントエンドのエラーはブラウザのコンソールで確認できます
-
-## アプリのカスタマイズ
-
-### VOICEVOXの話者変更
-- `main.py`の`speaker`パラメータを変更することで、異なる話者を選択可能
-
-### インタビューの質問変更
-- `main.py`の`QUESTIONS`リストを編集することで、質問内容をカスタマイズ可能
-
-### UIのカスタマイズ
-- `App.js`のスタイリングを編集することで、見た目をカスタマイズ可能
+1. アプリケーションにアクセス（デフォルトで http://localhost:3000）
+2. 「インタビューを開始する」ボタンをクリック
+3. 質問に対して、テキスト入力または音声入力で回答
+4. すべての質問に回答後、AIが歌詞と音楽を生成
+5. 生成された楽曲は自動的にブラウザで開かれ、QRコードでスマートフォンでも視聴可能
 
 ## ライセンス
 
-このプロジェクトは[MITライセンス](LICENSE)の下で公開されています。
+このプロジェクトは [MITライセンス](LICENSE) の下で公開されています。
 
 ## 謝辞
 
