@@ -151,110 +151,130 @@ QUESTIONS = [
 ]
 
 # Store answers
-answers = {}
+# answers = {}
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    try:
-        await websocket.accept()
-        logger.info("WebSocket connected")
+# @app.websocket("/ws")
+# async def websocket_endpoint(websocket: WebSocket):
+#     try:
+#         await websocket.accept()
+#         logger.info("WebSocket connected")
         
-        # リップシンク準備の確認メッセージを送信
-        await websocket.send_text(json.dumps({
-            "type": "setup_instruction",
-            "message": "3teneの準備ができたら開始します"
-        }))
+#         # リップシンク準備の確認メッセージを送信
+#         await websocket.send_text(json.dumps({
+#             "type": "setup_instruction",
+#             "message": "3teneの準備ができたら開始します"
+#         }))
         
-        while True:
-            try:
-                data = await websocket.receive_text()
-                if data == "start_interview":
-                    await start_interview(websocket)
-            except WebSocketDisconnect:
-                logger.info("WebSocket disconnected normally")
-                break
-            except Exception as e:
-                logger.error(f"Error processing message: {str(e)}")
-                try:
-                    await websocket.send_text(json.dumps({
-                        "type": "error",
-                        "message": "An error occurred processing your request"
-                    }))
-                except:
-                    pass
-                break
-    except Exception as e:
-        logger.error(f"WebSocket connection error: {str(e)}")
-    finally:
-        try:
-            await websocket.close()
-        except:
-            pass
+#         while True:
+#             try:
+#                 data = await websocket.receive_text()
+#                 if data == "start_interview":
+#                     await start_interview(websocket)
+#             except WebSocketDisconnect:
+#                 logger.info("WebSocket disconnected normally")
+#                 break
+#             except Exception as e:
+#                 logger.error(f"Error processing message: {str(e)}")
+#                 try:
+#                     await websocket.send_text(json.dumps({
+#                         "type": "error",
+#                         "message": "An error occurred processing your request"
+#                     }))
+#                 except:
+#                     pass
+#                 break
+#     except Exception as e:
+#         logger.error(f"WebSocket connection error: {str(e)}")
+#     finally:
+#         try:
+#             await websocket.close()
+#         except:
+#             pass
 
-async def start_interview(websocket: WebSocket):
-    """インタビューを開始し、質問と回答のやり取りを管理する"""
+# 新規追加: インタビュー開始エンドポイント
+@app.post("/start")
+async def start_interview():
+    """インタビューを開始する"""
     try:
-        # リップシンク準備の確認を送信
-        await websocket.send_text(json.dumps({
-            "type": "lip_sync_ready",
-            "message": "インタビューを開始します"
-        }))
-        
-        # 少し待機してから開始
-        await asyncio.sleep(0.5)
-        
-        # Greeting
         greeting = "こんにちは！青春ソングを作るためのインタビューを始めましょう。各質問に一言で答えてください。"
-        # まず音声を再生
-        await synthesize_voicevox(greeting)
-        # 少し待ってからテキストを表示
-        await asyncio.sleep(0.2)
-        await websocket.send_text(json.dumps({
-            "type": "question",
-            "message": greeting
-        }))
-        await asyncio.sleep(1.0)
+        # 音声合成を行わない
+        return {
+            "message": greeting,
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Error starting interview: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-        # Questions and answers
-        for i, question in enumerate(QUESTIONS):
-            await asyncio.sleep(0.5)
-            
-            # まず音声を再生
-            await synthesize_voicevox(question)
-            # 少し待ってからテキストを表示
-            await asyncio.sleep(0.2)
-            await websocket.send_text(json.dumps({
-                "type": "question",
-                "message": question
-            }))
-            
-            # 回答を受信
-            response = await websocket.receive_text()
-            answers[f"answer_{i+1}"] = response
-            await asyncio.sleep(0.5)
+@app.get("/questions/{index}")
+async def get_question(index: int):
+    """質問を取得する"""
+    try:
+        if index < 0 or index >= len(QUESTIONS):
+            raise HTTPException(status_code=400, detail="Invalid question index")
         
-        # Final message
-        end_message = "ありがとうございます。ミュージックビデオの生成を開始します。"
-        # まず音声を再生
-        await synthesize_voicevox(end_message)
-        # 少し待ってからテキストを表示
-        await asyncio.sleep(0.2)
-        await websocket.send_text(json.dumps({
-            "type": "message",
-            "message": end_message
-        }))
-        await asyncio.sleep(0.5)
+        question = QUESTIONS[index]
+        # 音声合成を行わない
+        return {
+            "message": question,
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Error getting question: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 新規追加: 音声合成用のエンドポイント
+@app.post("/speak")
+async def speak_text(text: dict):
+    """テキストを音声合成する"""
+    try:
+        await synthesize_voicevox(text["message"])
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Error in speech synthesis: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+# 新規追加: 回答を受け取るエンドポイント
+@app.post("/submit-answer")
+async def submit_answer(answer_data: dict):
+    """回答を受け取る"""
+    try:
+        logger.info(f"Received answer: {answer_data}")
+        return {
+            "status": "success",
+            "message": "Answer received"
+        }
+    except Exception as e:
+        logger.error(f"Error submitting answer: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 新規追加: 音楽生成エンドポイント
+@app.post("/generate")
+async def generate_music_and_lyrics(request: Dict[str, List[str]]):
+    """音楽と歌詞を生成する"""
+    try:
+        answers = request.get("answers", [])
+        # 歌詞生成
+        lyrics = await generate_lyrics({"info": " ".join(answers)})
         
-        # Generate song and video
-        await generate_song(websocket)
+        # 音楽生成
+        music = await generate_music({
+            "themes": answers,
+            "lyrics": lyrics["lyrics"]
+        })
+        
+        if "error" in music:
+            raise HTTPException(status_code=500, detail=music["error"])
+        
+        await synthesize_voicevox("楽曲が完成しました。別タブで自動的に再生されます。")
+        return {
+            "status": "success",
+            "video_url": music["video_url"]
+        }
         
     except Exception as e:
-        logger.error(f"Interview error: {str(e)}")
-        await websocket.send_text(json.dumps({
-            "type": "error",
-            "message": "インタビュー処理中にエラーが発生しました"
-        }))
-        raise
+        logger.error(f"Error in generation: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/transcribe")
 async def transcribe_audio(file: UploadFile = File(...)):
@@ -388,7 +408,7 @@ async def generate_music(request: Dict[str, Any]):
         task_id = task_data['data']['task_id']
         logger.info(f"Task ID: {task_id}")
         
-        max_attempts = 120
+        max_attempts = 240
         current_attempt = 0
         last_progress = -1
         generation_start_time = time.time()
@@ -463,58 +483,58 @@ async def generate_music(request: Dict[str, Any]):
     finally:
         logger.debug("Generation attempt completed")
 
-async def generate_song(websocket: WebSocket):
-    """Handle the song generation process and websocket communication"""
-    try:
-        themes = list(answers.values())
+# async def generate_song(websocket: WebSocket):
+#     """Handle the song generation process and websocket communication"""
+#     try:
+#         themes = list(answers.values())
         
-        # Start lyrics generation
-        await websocket.send_text(json.dumps({
-            "type": "status_update",
-            "status": "generating_lyrics"
-        }))
+#         # Start lyrics generation
+#         await websocket.send_text(json.dumps({
+#             "type": "status_update",
+#             "status": "generating_lyrics"
+#         }))
 
-        lyrics = await generate_lyrics({"info": " ".join(themes)})
+#         lyrics = await generate_lyrics({"info": " ".join(themes)})
         
-        # Start music generation
-        await websocket.send_text(json.dumps({
-            "type": "status_update",
-            "status": "generating_music"
-        }))
+#         # Start music generation
+#         await websocket.send_text(json.dumps({
+#             "type": "status_update",
+#             "status": "generating_music"
+#         }))
 
-        # Generate music
-        music = await generate_music({
-            "themes": themes,
-            "lyrics": lyrics["lyrics"]
-        })
+#         # Generate music
+#         music = await generate_music({
+#             "themes": themes,
+#             "lyrics": lyrics["lyrics"]
+#         })
 
-        if "error" in music:
-            # Handle error case
-            await websocket.send_text(json.dumps({
-                "type": "music_error",
-                "data": music["error"]
-            }))
-        else:
-            # Handle success case
-            await synthesize_voicevox("楽曲が完成しました。別タブで自動的に再生されます。")
+#         if "error" in music:
+#             # Handle error case
+#             await websocket.send_text(json.dumps({
+#                 "type": "music_error",
+#                 "data": music["error"]
+#             }))
+#         else:
+#             # Handle success case
+#             await synthesize_voicevox("楽曲が完成しました。別タブで自動的に再生されます。")
             
-            # Send completion message with video URL
-            await websocket.send_text(json.dumps({
-                "type": "music_complete",
-                "data": {
-                    "video_url": music["video_url"]
-                }
-            }))
+#             # Send completion message with video URL
+#             await websocket.send_text(json.dumps({
+#                 "type": "music_complete",
+#                 "data": {
+#                     "video_url": music["video_url"]
+#                 }
+#             }))
 
-            logger.info("Song generation and notification completed successfully")
+#             logger.info("Song generation and notification completed successfully")
 
-    except Exception as e:
-        logger.error(f"Song generation error: {str(e)}")
-        await websocket.send_text(json.dumps({
-            "type": "error",
-            "message": f"Failed to generate song: {str(e)}"
-        }))
-        raise
+#     except Exception as e:
+#         logger.error(f"Song generation error: {str(e)}")
+#         await websocket.send_text(json.dumps({
+#             "type": "error",
+#             "message": f"Failed to generate song: {str(e)}"
+#         }))
+#         raise
 
 if __name__ == "__main__":
     import uvicorn
