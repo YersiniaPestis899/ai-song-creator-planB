@@ -144,28 +144,28 @@ const sendAnswer = async () => {
       await getNextQuestion(nextIndex);
     } else {
       // 完了メッセージの音声合成と表示
-      const completionMessage = "ありがとうございます。歌詞の生成を開始します。";
+      const completionMessage = "ありがとうございます。スタッフに操作を交代してください。";
       setCurrentQuestion(completionMessage);
       await axios.post('http://localhost:8000/speak', {
-        message: completionMessage
+          message: completionMessage
       });
-
+  
       // 作詞状態を表示
       setGenerationStatus('generating_lyrics');
       
       // 歌詞生成APIを呼び出し
       const response = await axios.post('http://localhost:8000/generate', {
-        answers: newAnswers
+          answers: newAnswers
       });
-
+  
       if (response.data.status === "success") {
-        setGenerationStatus('complete');
-        setMusicData({
-          lyrics: response.data.data.lyrics,
-          title: response.data.data.title
-        });
+          setGenerationStatus('complete');
+          setMusicData({
+              lyrics: response.data.data.lyrics,
+              title: response.data.data.title
+          });
       }
-    }
+  }
     
   } catch (error) {
     console.error('Error sending answer:', error);
