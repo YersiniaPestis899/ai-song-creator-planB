@@ -138,8 +138,8 @@ bedrock = boto3.client(
     aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
 )
 
-# Suno API Key
-SUNO_API_KEY = os.getenv('SUNO_API_KEY')
+# Topmedia API Key
+TOPMEDIA_API_KEY = os.getenv('TOPMEDIA_API_KEY')
 
 # Interview questions
 QUESTIONS = [
@@ -150,54 +150,12 @@ QUESTIONS = [
     "今、あの頃の自分に伝えたい言葉を一つ挙げるとしたら？"
 ]
 
-# Store answers
-# answers = {}
-
-# @app.websocket("/ws")
-# async def websocket_endpoint(websocket: WebSocket):
-#     try:
-#         await websocket.accept()
-#         logger.info("WebSocket connected")
-        
-#         # リップシンク準備の確認メッセージを送信
-#         await websocket.send_text(json.dumps({
-#             "type": "setup_instruction",
-#             "message": "3teneの準備ができたら開始します"
-#         }))
-        
-#         while True:
-#             try:
-#                 data = await websocket.receive_text()
-#                 if data == "start_interview":
-#                     await start_interview(websocket)
-#             except WebSocketDisconnect:
-#                 logger.info("WebSocket disconnected normally")
-#                 break
-#             except Exception as e:
-#                 logger.error(f"Error processing message: {str(e)}")
-#                 try:
-#                     await websocket.send_text(json.dumps({
-#                         "type": "error",
-#                         "message": "An error occurred processing your request"
-#                     }))
-#                 except:
-#                     pass
-#                 break
-#     except Exception as e:
-#         logger.error(f"WebSocket connection error: {str(e)}")
-#     finally:
-#         try:
-#             await websocket.close()
-#         except:
-#             pass
-
-# 新規追加: インタビュー開始エンドポイント
+# インタビュー開始エンドポイント
 @app.post("/start")
 async def start_interview():
     """インタビューを開始する"""
     try:
         greeting = "こんにちは！青春ソングを作るためのインタビューを始めましょう。各質問に一言で答えてください。"
-        # 音声合成を行わない
         return {
             "message": greeting,
             "status": "success"
@@ -214,7 +172,6 @@ async def get_question(index: int):
             raise HTTPException(status_code=400, detail="Invalid question index")
         
         question = QUESTIONS[index]
-        # 音声合成を行わない
         return {
             "message": question,
             "status": "success"
@@ -223,7 +180,6 @@ async def get_question(index: int):
         logger.error(f"Error getting question: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# 新規追加: 音声合成用のエンドポイント
 @app.post("/speak")
 async def speak_text(text: dict):
     """テキストを音声合成する"""
@@ -234,7 +190,6 @@ async def speak_text(text: dict):
         logger.error(f"Error in speech synthesis: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     
-# 新規追加: 回答を受け取るエンドポイント
 @app.post("/submit-answer")
 async def submit_answer(answer_data: dict):
     """回答を受け取る"""
@@ -247,31 +202,65 @@ async def submit_answer(answer_data: dict):
     except Exception as e:
         logger.error(f"Error submitting answer: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
-# 新規追加: 音楽生成エンドポイント
+    
+# 音楽生成エンドポイント
 @app.post("/generate")
 async def generate_music_and_lyrics(request: Dict[str, List[str]]):
-    """音楽と歌詞を生成する"""
+    """歌詞を生成する"""
     try:
         answers = request.get("answers", [])
-        # 歌詞生成
-        lyrics = await generate_lyrics({"info": " ".join(answers)})
         
-        # 音楽生成
-        music = await generate_music({
-            "themes": answers,
-            "lyrics": lyrics["lyrics"]
-        })
-        
-        if "error" in music:
-            raise HTTPException(status_code=500, detail=music["error"])
-        
-        await synthesize_voicevox("楽曲が完成しました。別タブで自動的に再生されます。")
-        return {
-            "status": "success",
-            "video_url": music["video_url"]
-        }
-        
+        # 歌詞生成のプロンプトを作成
+        prompt = f"""以下の単語をテーマにして、青春をテーマにしたJ-POPの歌詞を作成してください。
+曲の構成は以下のようにしてください。
+
+<Verse 1>
+(1番の歌詞。青春時代の情景や感情を描写。4行程度）
+
+<Verse 2>
+(2番の歌詞。青春時代の別の側面や展開を描写。4行程度）
+
+<Chorus>
+(サビの歌詞。メッセージや感情の高まりを表現。4-6行程度）
+
+テーマの単語：{", ".join(answers)}"""
+
+        try:
+            # AWS Bedrockを使用して歌詞を生成
+            response = bedrock.invoke_model(
+                modelId=os.getenv('CLAUDE_MODEL_ID'),
+                contentType="application/json",
+                accept="application/json",
+                body=json.dumps({
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 200000,
+                    "messages": [{"role": "user", "content": prompt}]
+                })
+            )
+            response_body = json.loads(response['body'].read())
+            lyrics = response_body['content'][0]['text']
+
+            # VOICEVOXで完了メッセージを再生
+            await synthesize_voicevox(
+                "歌詞の生成が完了しました。表示された歌詞をコピーして、お好みの音楽生成サービスでご利用ください。"
+            )
+
+            return {
+                "status": "success",
+                "message": "歌詞が生成されました",
+                "data": {
+                    "lyrics": lyrics,
+                    "title": "Generated Lyrics"  # タイトルは固定値または空でもOK
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Error in lyrics generation: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to generate lyrics: {str(e)}"
+            )
+
     except Exception as e:
         logger.error(f"Error in generation: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -347,194 +336,218 @@ async def generate_lyrics(request: Dict[str, str]):
         logger.error(f"Lyrics generation error: {str(e)}")
         raise
 
+async def generate_lyrics(request: Dict[str, str]):
+    """回答から歌詞を生成する"""
+    base_url = "https://api.topmediai.com"  # 正しいドメイン
+
+    headers = {
+        "x-api-key": TOPMEDIA_API_KEY,
+        "accept": "application/json",
+        "Content-Type": "application/json"
+    }
+
+    # テーマに基づいたプロンプトの作成
+    prompt = f"Create J-pop lyrics about: {request['info']}"
+
+    # APIドキュメントに基づいたリクエストペイロード
+    payload = {
+        "prompt": prompt
+    }
+
+    try:
+        # 歌詞生成リクエストの送信
+        lyrics_url = f"{base_url}/v1/lyrics"
+        response = requests.post(
+            lyrics_url,
+            headers=headers,
+            json=payload
+        )
+
+        if response.status_code != 200:
+            logger.error(f"Lyrics generation error: Status {response.status_code}")
+            logger.error(f"Response: {response.text}")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Failed to generate lyrics: {response.text}"
+            )
+
+        lyrics_data = response.json()
+        return {"lyrics": lyrics_data.get("lyrics", "")}
+
+    except Exception as e:
+        logger.error(f"Lyrics generation error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate lyrics: {str(e)}"
+        )
+
 async def generate_music(request: Dict[str, Any]):
-    """Generate music using Suno AI with maximum stability settings"""
-    suno_api_url = "https://api.goapi.ai/api/suno/v1/music"
+    """Generate music using Topmediai API"""
+    base_url = "https://api.topmediai.com"
     
     headers = {
-        "X-API-Key": SUNO_API_KEY,
+        "x-api-key": TOPMEDIA_API_KEY,
+        "accept": "application/json",
         "Content-Type": "application/json"
     }
     
+    # セッション設定
+    session = requests.Session()
+    adapter = requests.adapters.HTTPAdapter(
+        max_retries=3,  # リトライ回数
+        pool_connections=10,  # コネクションプール数
+        pool_maxsize=10,  # 最大プールサイズ
+        pool_block=False  # ブロッキングしない
+    )
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    
     themes = request.get("themes", [])
+    lyrics = request.get("lyrics", "")
     themes_text = " ".join(themes)
     
-    # 以前の安定していた詳細な制約を持つプロンプト
-    description = (
-        f"Simple J-pop about {themes_text}. "
-        " No repeats. Female JP vocal."
-    )
-    
-    if len(description) > 200:
-        max_themes_length = 100
-        if len(themes_text) > max_themes_length:
-            themes_text = themes_text[:max_themes_length] + "..."
-            description = f"Simple J-pop about {themes_text}. No repeats. Female JP vocal."
-    
-    logger.info(f"Prompt length: {len(description)} characters")
+    # 音楽生成リクエストの送信
+    submit_url = f"{base_url}/v2/submit"
     
     payload = {
-        "custom_mode": False,
-        "mv": "chirp-v3-5",
-        "input": {
-            "gpt_description_prompt": description,
-            "make_instrumental": False,
-            "voice": "female",
-            "style": "j-pop",
-            "temperature": 0.1,        # 極めて低い温度で安定性を確保
-            "top_k": 5,                # 非常に制限的な選択
-            "top_p": 0.3,              # 最も可能性の高い選択のみ
-            "voice_settings": {
-                "gender": "female",
-                "language": "japanese",
-                "style": "clear",
-                "variation": "single"
-            }
-        }
+        "is_auto": 1,
+        "prompt": f"Create a J-pop song with these themes: {themes_text}",
+        "lyrics": lyrics,
+        "title": "AI Music",
+        "instrumental": 0,
+        "model_version": "v3.5",
+        "continue_at": 0,
+        "continue_song_id": ""
     }
     
     try:
-        logger.info("Starting music generation with maximum stability settings")
+        logger.info("Starting music generation with Topmediai")
         logger.info(f"Using themes: {themes_text}")
         
-        response = requests.post(suno_api_url, headers=headers, json=payload)
+        # タイムアウト設定
+        timeout = (3000, 30000)  # (接続タイムアウト, 読み取りタイムアウト)
         
-        if response.status_code != 200:
-            logger.error(f"API Error: Status {response.status_code}")
-            logger.error(f"Response: {response.text}")
-            response.raise_for_status()
+        # リトライ用の設定
+        max_submit_retries = 3
+        current_submit_retry = 0
         
-        task_data = response.json()
-        task_id = task_data['data']['task_id']
-        logger.info(f"Task ID: {task_id}")
-        
-        max_attempts = 240
-        current_attempt = 0
-        last_progress = -1
-        generation_start_time = time.time()
-        
-        while current_attempt < max_attempts:
+        while current_submit_retry < max_submit_retries:
             try:
-                status_response = requests.get(f"{suno_api_url}/{task_id}", headers=headers)
-                status_response.raise_for_status()
-                status_data = status_response.json()
-
-                if 'data' not in status_data:
-                    logger.error("Invalid response structure")
-                    logger.debug(f"Response data: {status_data}")
-                    raise ValueError("Invalid response format")
-
-                status = status_data['data'].get('status')
+                # 生成リクエストの送信
+                submit_response = session.post(
+                    submit_url,
+                    headers=headers,
+                    json=payload,
+                    timeout=timeout,
+                    verify=True  # SSL証明書の検証を有効に
+                )
+                submit_response.raise_for_status()
+                submit_data = submit_response.json()
                 
-                if status == 'completed':
-                    video_url = None
-                    
-                    if 'video_url' in status_data['data']:
-                        video_url = status_data['data']['video_url']
-                    elif 'output' in status_data['data'] and 'video_url' in status_data['data']['output']:
-                        video_url = status_data['data']['output']['video_url']
-                    elif 'clips' in status_data['data']:
-                        clips = status_data['data']['clips']
-                        if clips and isinstance(clips, dict):
-                            first_clip = next(iter(clips.values()))
-                            if 'video_url' in first_clip:
-                                video_url = first_clip['video_url']
-
-                    if not video_url:
-                        raise ValueError("No video URL found in response")
-
-                    generation_time = time.time() - generation_start_time
-                    logger.info(f"Music generated successfully in {generation_time:.1f} seconds")
-                    return {
-                        "video_url": video_url
-                    }
-
-                elif status == 'failed':
-                    error_message = status_data['data'].get('error', 'Unknown error')
-                    logger.error(f"Generation failed: {error_message}")
-                    raise ValueError(f"Generation failed: {error_message}")
-
-                elif status == 'processing':
-                    progress = status_data['data'].get('progress', 0)
-                    if progress != last_progress:
-                        logger.info(f"Progress: {progress}%")
-                        last_progress = progress
-                    current_attempt += 1
-                    await asyncio.sleep(5)
-
+                if submit_data.get("status") != 200:
+                    error_message = submit_data.get("message", "Unknown error")
+                    if "timeout" in error_message.lower():
+                        current_submit_retry += 1
+                        logger.warning(f"Generation timeout, retry {current_submit_retry} of {max_submit_retries}")
+                        await asyncio.sleep(30)
+                        continue
+                    else:
+                        raise ValueError(f"API Error: {error_message}")
+                
+                break
+                
+            except (requests.RequestException, ValueError) as e:
+                current_submit_retry += 1
+                if current_submit_retry < max_submit_retries:
+                    logger.warning(f"Request failed, retry {current_submit_retry} of {max_submit_retries}: {str(e)}")
+                    await asyncio.sleep(30)
                 else:
-                    logger.warning(f"Unknown status: {status}")
-                    current_attempt += 1
-                    await asyncio.sleep(5)
-
-            except requests.RequestException as e:
-                logger.error(f"Network error: {e}")
-                current_attempt += 1
-                await asyncio.sleep(5)
-                continue
-
-        logger.error("Generation timed out")
-        raise TimeoutError("Music generation timed out")
+                    raise
+        
+        # レスポンスデータの処理
+        response_data = submit_data.get("data", [])
+        if not response_data:
+            raise ValueError("No data received from API")
+        
+        first_result = response_data[0]
+        song_id = first_result.get("song_id")
+        
+        if not song_id:
+            raise ValueError("No song ID received from API")
+        
+        logger.info(f"Song ID: {song_id}")
+        initial_status = first_result.get("status", "").upper()
+        
+        # 生成状態の監視が必要な場合
+        if initial_status == "RUNNING":
+            query_url = f"{base_url}/v2/query"
+            max_attempts = 360  # 60分のタイムアウト
+            current_attempt = 0
+            last_progress = -1
             
+            while current_attempt < max_attempts:
+                try:
+                    # ステータス確認
+                    status_response = session.get(
+                        query_url,
+                        headers=headers,
+                        params={"song_id": song_id},
+                        timeout=(10, 30),  # ステータスチェックは短めのタイムアウト
+                        verify=True
+                    )
+                    status_response.raise_for_status()
+                    status_data = status_response.json()
+                    
+                    if status_data.get("status") != 200:
+                        error_message = status_data.get("message", "Unknown error")
+                        if "timeout" in error_message.lower():
+                            await asyncio.sleep(30)
+                            continue
+                        else:
+                            raise ValueError(f"Status check failed: {error_message}")
+                    
+                    song_status = status_data.get("data", {}).get("status", "").upper()
+                    progress = status_data.get("data", {}).get("progress", 0)
+                    
+                    if progress != last_progress:
+                        logger.info(f"Generation progress: {progress}%")
+                        last_progress = progress
+                    
+                    if song_status == "COMPLETED":
+                        return {
+                            "video_url": status_data.get("data", {}).get("url")
+                        }
+                    elif song_status == "FAILED":
+                        raise ValueError("Generation failed")
+                    
+                    current_attempt += 1
+                    # 進捗に応じて待機時間を調整
+                    if progress < 30:
+                        await asyncio.sleep(20)
+                    elif progress < 70:
+                        await asyncio.sleep(30)
+                    else:
+                        await asyncio.sleep(15)
+                    
+                except requests.RequestException as e:
+                    logger.error(f"Network error checking status: {e}")
+                    await asyncio.sleep(30)
+                    continue
+            
+            raise TimeoutError("Generation timed out after 60 minutes")
+        
+        # 即時完了の場合
+        return {
+            "video_url": first_result.get("audio")
+        }
+        
     except Exception as e:
         logger.error(f"Error in music generation: {str(e)}")
         return {"error": f"Failed to generate music: {str(e)}"}
-        
+    
     finally:
+        session.close()
         logger.debug("Generation attempt completed")
-
-# async def generate_song(websocket: WebSocket):
-#     """Handle the song generation process and websocket communication"""
-#     try:
-#         themes = list(answers.values())
-        
-#         # Start lyrics generation
-#         await websocket.send_text(json.dumps({
-#             "type": "status_update",
-#             "status": "generating_lyrics"
-#         }))
-
-#         lyrics = await generate_lyrics({"info": " ".join(themes)})
-        
-#         # Start music generation
-#         await websocket.send_text(json.dumps({
-#             "type": "status_update",
-#             "status": "generating_music"
-#         }))
-
-#         # Generate music
-#         music = await generate_music({
-#             "themes": themes,
-#             "lyrics": lyrics["lyrics"]
-#         })
-
-#         if "error" in music:
-#             # Handle error case
-#             await websocket.send_text(json.dumps({
-#                 "type": "music_error",
-#                 "data": music["error"]
-#             }))
-#         else:
-#             # Handle success case
-#             await synthesize_voicevox("楽曲が完成しました。別タブで自動的に再生されます。")
-            
-#             # Send completion message with video URL
-#             await websocket.send_text(json.dumps({
-#                 "type": "music_complete",
-#                 "data": {
-#                     "video_url": music["video_url"]
-#                 }
-#             }))
-
-#             logger.info("Song generation and notification completed successfully")
-
-#     except Exception as e:
-#         logger.error(f"Song generation error: {str(e)}")
-#         await websocket.send_text(json.dumps({
-#             "type": "error",
-#             "message": f"Failed to generate song: {str(e)}"
-#         }))
-#         raise
 
 if __name__ == "__main__":
     import uvicorn
