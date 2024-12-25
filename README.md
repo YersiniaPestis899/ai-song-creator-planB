@@ -1,6 +1,6 @@
 # AI Song Creator
 
-A web application that generates original music using AI based on users' memories and experiences.
+A web application that generates lyrics using AI based on users' memories and experiences.
 
 ## Features
 
@@ -11,13 +11,11 @@ A web application that generates original music using AI based on users' memorie
 
 2. AI Content Generation
    - Lyrics generation using AWS Bedrock
-   - Music generation through Topmediai API
    - Voice synthesis using VOICEVOX
 
 3. User Experience
    - Progressive web application design
    - Mobile-responsive interface
-   - QR code generation for mobile playback
    - Real-time voice feedback
 
 ## Technical Stack
@@ -30,10 +28,8 @@ A web application that generates original music using AI based on users' memorie
 
 ### Backend
 - FastAPI
-- WebSocket support
 - Integration with AI services:
   - AWS Bedrock (lyrics generation)
-  - Topmediai API (music generation)
   - Google Cloud Speech-to-Text (voice recognition)
   - VOICEVOX (voice synthesis)
 
@@ -45,7 +41,6 @@ A web application that generates original music using AI based on users' memorie
 - VOICEVOX Engine
 - AWS Account with Bedrock access
 - Google Cloud Account with Speech-to-Text API enabled
-- Topmediai API key
 
 ### Installation Steps
 
@@ -75,7 +70,6 @@ AWS_ACCESS_KEY_ID=your_aws_access_key
 AWS_SECRET_ACCESS_KEY=your_aws_secret_key
 AWS_REGION=your_aws_region
 CLAUDE_MODEL_ID=anthropic.claude-3
-TOPMEDIA_API_KEY=your_topmedia_api_key
 GOOGLE_APPLICATION_CREDENTIALS=path_to_credentials.json
 ```
 
@@ -107,14 +101,8 @@ The application will be available at `http://localhost:3000` by default.
 - `GET /questions/{index}` - Retrieve interview questions
 - `POST /speak` - Synthesize speech from text
 - `POST /submit-answer` - Process user responses
-- `POST /generate` - Generate lyrics and music
+- `POST /generate` - Generate lyrics based on answers
 - `POST /transcribe` - Convert voice input to text
-
-### Advanced Features
-- WebSocket support for real-time communication
-- Error handling and retry mechanisms for API calls
-- Progress tracking for music generation
-- Temporary file management for audio processing
 
 ## Development Guidelines
 
@@ -141,7 +129,6 @@ This project is licensed under the MIT License.
 
 - VOICEVOX Project
 - AWS Bedrock
-- Topmediai
 - Google Cloud
 - All open-source contributors
 
