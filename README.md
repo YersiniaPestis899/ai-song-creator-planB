@@ -1,104 +1,150 @@
-# Your Song Creator
+# AI Song Creator
 
-このアプリケーションは、ユーザーの思い出や経験に基づいて、AIを使用してオリジナルの音楽を生成するウェブアプリケーションです。
+A web application that generates original music using AI based on users' memories and experiences.
 
-## 機能
+## Features
 
-- インタラクティブなインタビュー形式で思い出を収集
-- 音声入力による回答機能
-- リアルタイムの音声合成による質問読み上げ
-- AIによる歌詞生成
-- AIによる音楽生成
-- スマートフォンでの視聴用QRコード生成
+1. Interactive Memory Collection
+   - Interactive interview-style memory gathering
+   - Voice input response capability
+   - Real-time text-to-speech question reading
 
-## 技術スタック
+2. AI Content Generation
+   - Lyrics generation using AWS Bedrock
+   - Music generation through Topmediai API
+   - Voice synthesis using VOICEVOX
 
-### フロントエンド
-- React
+3. User Experience
+   - Progressive web application design
+   - Mobile-responsive interface
+   - QR code generation for mobile playback
+   - Real-time voice feedback
+
+## Technical Stack
+
+### Frontend
+- React.js
 - Tailwind CSS
 - Axios
-- Lucide React (アイコン)
+- Audio recording and playback capabilities
 
-### バックエンド
+### Backend
 - FastAPI
-- Python
-- VOICEVOX (音声合成)
-- AWS Bedrock (歌詞生成)
-- Suno AI (音楽生成)
-- Google Cloud Speech-to-Text (音声認識)
+- WebSocket support
+- Integration with AI services:
+  - AWS Bedrock (lyrics generation)
+  - Topmediai API (music generation)
+  - Google Cloud Speech-to-Text (voice recognition)
+  - VOICEVOX (voice synthesis)
 
-## セットアップ
+## Setup
 
-### 必要条件
-- Node.js
-- Python 3.8以上
+### Prerequisites
+- Node.js (LTS version)
+- Python 3.8 or higher
 - VOICEVOX Engine
-- AWS アカウント
-- Google Cloud アカウント
-- Suno AI アカウント
+- AWS Account with Bedrock access
+- Google Cloud Account with Speech-to-Text API enabled
+- Topmediai API key
 
-### インストール
+### Installation Steps
 
-1. リポジトリのクローン
+1. Clone the repository
 ```bash
-git clone https://github.com/YourUsername/ai-song-creator-sub.git
-cd ai-song-creator-sub
+git clone https://github.com/YersiniaPestis899/ai-song-creator-planB.git
+cd ai-song-creator-planB
 ```
 
-2. フロントエンド依存関係のインストール
+2. Frontend Setup
 ```bash
+cd frontend
 npm install
 ```
 
-3. バックエンド依存関係のインストール
+3. Backend Setup
 ```bash
+cd backend
 pip install -r requirements.txt
 ```
 
-4. 環境変数の設定
-`.env` ファイルを作成し、必要な環境変数を設定:
-```
+4. Environment Configuration
+
+Create a `.env` file in the backend directory with the following variables:
+```env
 AWS_ACCESS_KEY_ID=your_aws_access_key
 AWS_SECRET_ACCESS_KEY=your_aws_secret_key
 AWS_REGION=your_aws_region
-SUNO_API_KEY=your_suno_api_key
-GOOGLE_APPLICATION_CREDENTIALS=path_to_your_google_credentials.json
+CLAUDE_MODEL_ID=anthropic.claude-3
+TOPMEDIA_API_KEY=your_topmedia_api_key
+GOOGLE_APPLICATION_CREDENTIALS=path_to_credentials.json
 ```
 
-### 起動方法
+### Running the Application
 
-1. VOICEVOXの起動
-VOICEVOXエンジンを起動し、ポート50021で待ち受けていることを確認
-
-2. バックエンドの起動
+1. Start VOICEVOX
 ```bash
+# Ensure VOICEVOX engine is running on port 50021
+```
+
+2. Launch Backend
+```bash
+cd backend
 python main.py
 ```
 
-3. フロントエンドの起動
+3. Start Frontend
 ```bash
+cd frontend
 npm start
 ```
 
-## 使用方法
+The application will be available at `http://localhost:3000` by default.
 
-1. アプリケーションにアクセス（デフォルトで http://localhost:3000）
-2. 「インタビューを開始する」ボタンをクリック
-3. 質問に対して、テキスト入力または音声入力で回答
-4. すべての質問に回答後、AIが歌詞と音楽を生成
-5. 生成された楽曲は自動的にブラウザで開かれ、QRコードでスマートフォンでも視聴可能
+## API Endpoints
 
-## ライセンス
+### Core Endpoints
+- `POST /start` - Initialize interview session
+- `GET /questions/{index}` - Retrieve interview questions
+- `POST /speak` - Synthesize speech from text
+- `POST /submit-answer` - Process user responses
+- `POST /generate` - Generate lyrics and music
+- `POST /transcribe` - Convert voice input to text
 
-このプロジェクトは [MITライセンス](LICENSE) の下で公開されています。
+### Advanced Features
+- WebSocket support for real-time communication
+- Error handling and retry mechanisms for API calls
+- Progress tracking for music generation
+- Temporary file management for audio processing
 
-## 謝辞
+## Development Guidelines
 
-- VOICEVOXプロジェクト
-- Suno AI
+1. Error Handling
+- Comprehensive error logging
+- Graceful degradation
+- User-friendly error messages
+
+2. Performance Optimization
+- Efficient file handling
+- Connection pooling
+- Retry mechanisms for external services
+
+3. Security Considerations
+- Environment variable management
+- CORS configuration
+- Temporary file cleanup
+
+## License
+
+This project is licensed under the MIT License.
+
+## Acknowledgments
+
+- VOICEVOX Project
 - AWS Bedrock
-- その他、使用しているオープンソースプロジェクトの開発者の皆様
+- Topmediai
+- Google Cloud
+- All open-source contributors
 
-## お問い合わせ
+## Support
 
-バグ報告や機能リクエストは、GitHubのIssuesにてお願いします。
+For bug reports or feature requests, please use the GitHub Issues section.
